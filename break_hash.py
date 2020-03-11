@@ -1,43 +1,51 @@
 import argparse, hashlib
 from lib.decorators import coroutine
 
-def producer(file, next_coroutine):
+def hasher(hexdigest, f_hash, readline, output):
     try:
-        for line in file:
-            next_coroutine.send(line)
-    except ValueError as error:
-        print(error)
+        plain_text = next( readline )
+        while plain_text:
+            hashed = f_hash(plain_text.strip()).hexdigest()
+            if hashed == hexdigest:
+                output.send(plain_text)
+                plain_text = None
+            else:
+                plain_text = next( readline )
+    except StopIteration:
+        output.send(None)
     finally:
-        next_coroutine.close()
+        readline.close()
+        output.close()   
 
 @coroutine
-def hasher(hexdigest, f_hash, next_coroutine):
+def producer(wordlist):
     try:
-        while True:
-            plain_text = yield
-            hashed = f_hash(plain_text.strip().encode("utf-8")).hexdigest()
-            if hashed == hexdigest:
-                next_coroutine.send(plain_text)
-    except GeneratorExit:
+        for line in wordlist:
+            yield line
+    except GeneratorExit as e:
         pass
 
 @coroutine
-def io_key_word():
+def found_key_word():
     try:
         while True:
             key_word = yield
-            print(key_word)
+            if key_word:
+                output = "passphrase is: %s" % key_word.decode('utf-8')
+            else:
+                output = "passphrase not found"    
+            print(output)
     except GeneratorExit:
         pass
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("hash", type=str)
-    parser.add_argument("infile", type=argparse.FileType("r"))
+    parser.add_argument("infile", type=argparse.FileType("rb"))
     args = parser.parse_args()
 
-    output = io_key_word()
-    check_hash = hasher(args.hash, hashlib.md5, output)
+    output = found_key_word()
+    readline = producer(args.infile)
 
-    producer(args.infile, check_hash)
+    hasher(args.hash, hashlib.sha1, readline, output)
 

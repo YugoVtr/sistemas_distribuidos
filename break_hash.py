@@ -1,51 +1,36 @@
-import argparse, hashlib
+import hashlib, sys
 from lib.decorators import coroutine
 
-def hasher(hexdigest, f_hash, readline, output):
+def hasher(hexdigest, f_hash, word_list):
     try:
-        plain_text = next( readline )
-        while plain_text:
-            hashed = f_hash(plain_text.strip()).hexdigest()
-            if hashed == hexdigest:
-                output.send(plain_text)
-                plain_text = None
-            else:
-                plain_text = next( readline )
+        test = test_hash(hexdigest, f_hash)
+        password = next( word_list )
+        while( password ):
+            test.send( password.strip() )
+            password = next( word_list )
     except StopIteration:
-        output.send(None)
-    finally:
-        readline.close()
-        output.close()   
-
-@coroutine
-def producer(wordlist):
-    try:
-        for line in wordlist:
-            yield line
-    except GeneratorExit as e:
         pass
+    finally:
+        test.close()
+        sys.exit(0)
 
 @coroutine
-def found_key_word():
+def test_hash(test_pwd, f_hash):
     try:
         while True:
-            key_word = yield
-            if key_word:
-                output = "passphrase is: %s" % key_word.decode('utf-8')
-            else:
-                output = "passphrase not found"    
-            print(output)
+            password = (yield)
+            hashed = f_hash(password).hexdigest()
+            if test_pwd == hashed:
+                print("password is %s" % password)
+                sys.exit(0)
     except GeneratorExit:
-        pass
+        print("Password not found")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("hash", type=str)
-    parser.add_argument("infile", type=argparse.FileType("rb"))
-    args = parser.parse_args()
+    f_hash = hashlib.sha1
+    hash_text = f_hash(b"asdf234").hexdigest()
+    word_list = open("files/rockyou.txt", 'rb')
 
-    output = found_key_word()
-    readline = producer(args.infile)
-
-    hasher(args.hash, hashlib.sha1, readline, output)
+    hasher(hash_text, hashlib.sha1, word_list)
+    word_list.close()
 

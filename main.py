@@ -1,45 +1,49 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import hashlib
 from break_hash import hasher
 from multiprocessing import Process, Queue
-
-def run_breaker(hash_text, f_hash, wordlist, stack):
-    password = hasher(hash_text, f_hash, wordlist)
-    stack.put(password)
 
 def build_sub_wordlist( wordlist, size ):
     sub_wordlist = []
     try:
         for i in range(size):
-            sub_wordlist.append( next(wordlist) )
-        return sub_wordlist
+            pwd = next(wordlist)
+            if type(pwd) == bytes :
+                pwd = pwd.decode('utf-8')
+            sub_wordlist.append( pwd.strip() )
     except:
         pass
     finally:
         return sub_wordlist
+    
+def run_breaker(hash_text, f_hash, wordlist, stack):
+    password = hasher(hash_text, f_hash, wordlist)
+    stack.put(password)
 
-if __name__ == "__main__":
-    f_hash = hashlib.sha1
-    hash_text = f_hash(b"familiapuchis").hexdigest()
-    wordlist = open("files/rockyou.txt", 'rb')
+def run_task(hash_text, f_hash, wordlist):
     stack = Queue()
+    procs = []
     
     sub_wordlist_size = 1793049
  
     sub_wordlist = build_sub_wordlist(wordlist, sub_wordlist_size)
     while len(sub_wordlist) > 0 :        
         p = Process(target=run_breaker, args=(hash_text, f_hash, sub_wordlist, stack,))
+        procs.append(p)
         p.start()
         sub_wordlist = build_sub_wordlist(wordlist, sub_wordlist_size)
+        
+    for p in procs:
+        p.join()
         
     while not stack.empty():
         password = stack.get()
         if password:
-            print("Password is '%s'" % password.decode('utf-8'))
+            return password
+    
+    return None
         
-    wordlist.close()
 
 
 

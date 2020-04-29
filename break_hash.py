@@ -6,7 +6,7 @@ from lib.decorators import coroutine
 def hasher(hexdigest, f_hash, word_list):
     test = test_hash(hexdigest, f_hash)
     for password in word_list:
-        pwd = password.strip()
+        pwd = password.encode('utf-8')
         if test.send( pwd ): 
             return pwd
 

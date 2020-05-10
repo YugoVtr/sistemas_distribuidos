@@ -9,9 +9,9 @@ from flask_restful import Resource, Api
 app = Flask(__name__)
 
 class BreakHash(Resource):
-    hash_text = hashlib.sha1(b"december").hexdigest()
+    hash_text = hashlib.sha1(b"123kissmybutt").hexdigest()
     wordlist = open("files/rockyou.txt", 'rb')
-    sub_wordlist_size = 100 # 1793049
+    sub_wordlist_size = 1793049
     clients = []
     
     def get(self):

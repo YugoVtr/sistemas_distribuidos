@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import rpyc, threading
+import rpyc, logging
 from rpyc.utils.server import ThreadedServer
 from pymongo import MongoClient
 
 """
-Instrucoes
+INSTRUCOES
 O sistema deve permitir que um servidor receba dados de desempenho de varios 
 hosts em uma rede:
  - % de utilização de CPU, 
@@ -23,8 +23,6 @@ PARTE II:
 O servidor deve poder solicitar explicitamente que um cliente específico envie
 suas informações (polling)
 
-Mongo Pwd: 0BTgfcX0dYeiIrdX
-Mongo URL: mongodb+srv://yugo:0BTgfcX0dYeiIrdX@default-qmfnx.mongodb.net/test?retryWrites=true&w=majority
 """
 
 """ Classe para manipular o banco de dados """
@@ -35,9 +33,11 @@ class Model():
         db = client.get_database('monitor_db')
         self.records = db.monitor_records
 
+    # Deleta todos os registros no banco
     def delete_all(self):
         self.records.delete_many({})     
         
+    # Insere uma dict no banco
     def insert(self, obj):
         try:    
             self.records.insert_one(obj)
@@ -45,7 +45,8 @@ class Model():
             # Ta dando erro ao inserir, mas ta inserindo, 
             # entao to ignorando por hora
             pass
-        
+    
+    # Lista todos os registros no banco
     def list_all(self):
         return list( self.records.find({}) )          
  
@@ -53,26 +54,24 @@ class Model():
 class Servidor(rpyc.Service):
     def __init__(self):
         self.model = Model()
-        self.connections = []
-    
-    def on_connect(self, conn):
-        self.connections.append(conn)      
         
-    def on_disconnect(self, conn):
-        self.connections.remove(conn)
-
     def exposed_save(self, obj): 
-        self.model.insert(obj)
-        
-    def poll(self):
-        for conn in self.connections:
-            conn.root.callback()
+        self.model.insert(obj)    
     
-def run_server():
+    def exposed_debug(self, msg):
+        logging.info(msg)
+                    
+if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s|%(levelname)s --> %(message)s",
+        datefmt="%d/%m/%Y %H:%M"
+    )
+    
+    # Limpar o banco de dados
+    m = Model()
+    m.delete_all()
+    
+    # Rodar o servidor
     t = ThreadedServer(Servidor, port=18861)
     t.start()
-                
-if __name__ == "__main__":
-    run_server()
-    # t = threading.Thread(target=run_server)
-    # t.start()

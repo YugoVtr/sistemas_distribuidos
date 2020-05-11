@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import rpyc 
+import rpyc, time
 import shutil, psutil
+import logging, signal
 from datetime import datetime
+from threading import Thread
 
+""" Classe que implementa o monitoramento do SO """
 class Monitor():
     """
         Descricao: Monitora o disco principal em Gb
@@ -46,18 +49,53 @@ class Monitor():
         } 
 
 """ Classe Cliente """
-class Cliente(rpyc.Service):       
-    def exposed_callback(self):
-        run_client()
-
-def send_to_server(connection):
-    m = Monitor()   
-    connection.root.save(m.get_all_status())
-
-def run_client():
-    connection = rpyc.connect("127.0.0.1", 18861, service=Cliente)
-    send_to_server(connection)
-    connection.root.poll()
+class Cliente(rpyc.Service):    
+    current = None 
     
+    class Daemon(object):
+        def __init__(self, callback, interval=60):
+            self.interval = interval
+            self.callback = callback
+            self.active = True
+            self.thread = Thread(target = self.work)
+            self.thread.start()
+                    
+        def stop(self):
+            logging.info("Encerrando cliente")
+            self.active = False
+            self.thread.join()
+        
+        def work(self):
+            logging.info("Monitoramento iniciado - Precione 'Ctrl+C' para encerrar.")
+            while self.active:
+                if callable( self.callback ):    
+                    m = Monitor()
+                    logging.info("Enviando ao servidor...")
+                    self.callback( m.get_all_status() )
+                time.sleep(self.interval)
+        
+        def update(self):
+            m = Monitor()
+            self.callback( m.get_all_status() )
+    
+    def on_connect(self, conn):
+        self.current = self.Daemon(conn.root.save)
+    
+    def on_disconnect(self, conn):
+        self.current.stop()
+
+
+conn = None
+
+def handler(signal, frame):
+    global conn
+    conn.close()
+
 if __name__ == "__main__":
-    run_client()   
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s|%(levelname)s --> %(message)s",
+        datefmt="%d/%m/%Y %H:%M"
+    )
+    signal.signal(signal.SIGINT, handler)
+    conn = rpyc.connect("127.0.0.1", 18861, service=Cliente)

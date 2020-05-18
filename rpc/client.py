@@ -53,7 +53,7 @@ class Cliente(rpyc.Service):
     current = None 
     
     class Daemon(object):
-        def __init__(self, callback, interval=60):
+        def __init__(self, callback, interval=10):
             self.interval = interval
             self.callback = callback
             self.active = True
@@ -83,7 +83,10 @@ class Cliente(rpyc.Service):
     
     def on_disconnect(self, conn):
         self.current.stop()
-
+        
+    def exposed_monitor(self):
+        m = Monitor()               
+        return m.get_all_status()
 
 conn = None
 

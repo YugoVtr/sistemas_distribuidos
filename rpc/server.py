@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import rpyc, logging
+import rpyc, logging, pprint, asyncio
 from rpyc.utils.server import ThreadedServer
 from pymongo import MongoClient
+from threading import Thread
+
+pool = False
 
 """
 INSTRUCOES
@@ -54,15 +57,44 @@ class Model():
 class Servidor(rpyc.Service):
     def __init__(self):
         self.model = Model()
+        self.check = Thread(target=self.start_pool)
+        self.check.start()
+        self.connections = []
+        
+    def __del__(self):
+        self.check.join()
+    
+    def on_connect(self, conn):
+        self.connections.append(conn)
         
     def exposed_save(self, obj): 
-        self.model.insert(obj)    
-    
-    def exposed_debug(self, msg):
-        logging.info(msg)
+        self.model.insert(obj)
+        
+    def start_pool(self):
+        try: 
+            global pool
+            while True:
+                if pool:
+                    for conn in self.connections:
+                        print("Aguardando conexão com %s" % conn)
+                        m = conn.root.monitor()
+                        while m == None:
+                            pass
+                        print(m)
+                        pool = False
+        except Exception as e:
+            logging.error(e)
+            print("Erro durante pool")
+        finally:
+            pool = False
                     
+def run_server(server):
+    server.start()
+                        
 if __name__ == "__main__":
     logging.basicConfig(
+        filename="server.log",
+        filemode="w",
         level=logging.INFO,
         format="%(asctime)s|%(levelname)s --> %(message)s",
         datefmt="%d/%m/%Y %H:%M"
@@ -73,5 +105,25 @@ if __name__ == "__main__":
     m.delete_all()
     
     # Rodar o servidor
-    t = ThreadedServer(Servidor, port=18861)
-    t.start()
+    server = ThreadedServer(Servidor, port=18861)
+    menu = Thread(target=run_server, args=(server,))
+    menu.start()
+    
+    try:    
+        msg = "\nOpções: \n[1] Relatório;\n[2] Pool \n[3] Sair\n> "
+        opt = int( input(msg) )
+        while(opt != 3):
+            if opt == 1:
+                rel = m.list_all()
+                pprint.PrettyPrinter(indent=4).pprint(rel)
+            elif opt == 2:
+                pool = True
+                while pool:
+                    pass
+            opt = int( input(msg) )
+    except Exception as e:
+        logging.error(e)
+        print("Opção invalida. Encerrando.")
+    finally:
+        server.close()
+        menu.join()
